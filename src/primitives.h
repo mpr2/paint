@@ -33,5 +33,6 @@ struct Color {
 
 void put_pixel(unsigned char *buffer, int x, int y, Color color, int thickness);
 void bresenham_line(unsigned char *buffer, int p0x, int p0y, int p1x, int p1y, Color color, int thickness);
-void midpoint_circle(unsigned char *buffer, int x0, int y0, float radius, Color color, int thickness);
+void midpoint_circle(unsigned char *buffer, int x0, int y0, float radius, bool fill, Color color, int thickness);
+void rectangle(unsigned char *buffer, int x0, int y0, int x1, int y1, bool fill, Color color, int thickness);
 void flood_fill(unsigned char *buffer, int x, int y, Color color);

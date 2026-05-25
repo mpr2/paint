@@ -47,7 +47,7 @@ void bresenham_line(unsigned char *buffer, int x0, int y0, int x1, int y1, Color
     }
 }
 
-void midpoint_circle(unsigned char *buffer, int x0, int y0, float radius, Color color, int thickness) {
+void midpoint_circle(unsigned char *buffer, int x0, int y0, float radius, bool fill, Color color, int thickness) {
     float x = 0;
     float y = -radius;
     float p = -radius;
@@ -60,15 +60,50 @@ void midpoint_circle(unsigned char *buffer, int x0, int y0, float radius, Color 
             p += 2*x + 1;
         }
 
-        put_pixel(buffer, (int)(x0 + x), (int)(y0 + y), color, thickness);
-        put_pixel(buffer, (int)(x0 - x), (int)(y0 + y), color, thickness);
-        put_pixel(buffer, (int)(x0 + x), (int)(y0 - y), color, thickness);
-        put_pixel(buffer, (int)(x0 - x), (int)(y0 - y), color, thickness);
-        put_pixel(buffer, (int)(x0 + y), (int)(y0 + x), color, thickness);
-        put_pixel(buffer, (int)(x0 - y), (int)(y0 + x), color, thickness);
-        put_pixel(buffer, (int)(x0 + y), (int)(y0 - x), color, thickness);
-        put_pixel(buffer, (int)(x0 - y), (int)(y0 - x), color, thickness);
+        if (fill) {
+            bresenham_line(buffer, (int)(x0 + x), (int)(y0 + y), (int)(x0 - x), (int)(y0 + y), color, 0);
+            bresenham_line(buffer, (int)(x0 + x), (int)(y0 - y), (int)(x0 - x), (int)(y0 - y), color, 0);
+            bresenham_line(buffer, (int)(x0 + y), (int)(y0 + x), (int)(x0 - y), (int)(y0 + x), color, 0);
+            bresenham_line(buffer, (int)(x0 + y), (int)(y0 - x), (int)(x0 - y), (int)(y0 - x), color, 0);
+        }
+        else {
+            put_pixel(buffer, (int)(x0 + x), (int)(y0 + y), color, thickness);
+            put_pixel(buffer, (int)(x0 - x), (int)(y0 + y), color, thickness);
+            put_pixel(buffer, (int)(x0 + x), (int)(y0 - y), color, thickness);
+            put_pixel(buffer, (int)(x0 - x), (int)(y0 - y), color, thickness);
+            put_pixel(buffer, (int)(x0 + y), (int)(y0 + x), color, thickness);
+            put_pixel(buffer, (int)(x0 - y), (int)(y0 + x), color, thickness);
+            put_pixel(buffer, (int)(x0 + y), (int)(y0 - x), color, thickness);
+            put_pixel(buffer, (int)(x0 - y), (int)(y0 - x), color, thickness);
+        }
+
         x += 1;
+    }
+}
+
+void rectangle(unsigned char *buffer, int x0, int y0, int x1, int y1, bool fill, Color color, int thickness) {
+    if (x0 > x1) {
+        std::swap(x0, x1);
+    }
+    if (y0 > y1) {
+        std::swap(y0, y1);
+    }
+    if (fill) {
+        for (int x = x0; x <= x1; x++) {
+            for (int y = y0; y <= y1; y++) {
+                put_pixel(buffer, x, y, color, 0);
+            }
+        }
+    }
+    else {
+        for (int x = x0; x <= x1; x++) {
+            put_pixel(buffer, x, y0, color, thickness);
+            put_pixel(buffer, x, y1, color, thickness);
+        }
+        for (int y = y0; y <= y1; y++) {
+            put_pixel(buffer, x0, y, color, thickness);
+            put_pixel(buffer, x1, y, color, thickness);
+        }
     }
 }
 

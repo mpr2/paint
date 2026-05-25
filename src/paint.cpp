@@ -18,9 +18,10 @@ struct State {
     unsigned char *canvas;
     bool clear = false;
     bool drawing = false;
-    int current_tool = 0;
+    int current_tool = TOOL_PENCIL;
     Color color = Color(0,0,0,255);
     int thickness = 0;
+    bool fill = false;
     int draw_begin_x = 0;
     int draw_begin_y = 0;
     int mousex;
@@ -130,10 +131,11 @@ void State::update() {
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !ImGui::GetIO().WantCaptureMouse) {
         switch (current_tool) {
-            case 0:
-            case 1:
-            case 2:
-            case 3:
+            case TOOL_LINE:
+            case TOOL_CIRCLE:
+            case TOOL_PENCIL:
+            case TOOL_ERASER:
+            case TOOL_RECT:
             if (!drawing) {
                 draw_begin_x = mousex;
                 draw_begin_y = mousey;
@@ -141,7 +143,7 @@ void State::update() {
             }
             break;
 
-            case 4:
+            case TOOL_BUCKET:
             if (!drawing) {
                 flood_fill(canvas, mousex, mousey, color);
                 drawing = true;
@@ -150,26 +152,33 @@ void State::update() {
     }
     else {
         switch (current_tool) {
-            case 0:
+            case TOOL_LINE:
             if (drawing) {
                 bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
                 drawing = false;
             }
             break;
 
-            case 1:
+            case TOOL_CIRCLE:
             if (drawing) {
                 float x = (float) fabs(mousex - draw_begin_x);
                 float y = (float) fabs(mousey - draw_begin_y);
-                midpoint_circle(canvas, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color, thickness);
+                midpoint_circle(canvas, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), fill, color, thickness);
                 drawing = false;
             }
             break;
 
-            case 2:
-            case 3:
-            case 4:
+            case TOOL_PENCIL:
+            case TOOL_ERASER:
+            case TOOL_BUCKET:
             drawing = false;
+            break;
+
+            case TOOL_RECT:
+            if (drawing) {
+                rectangle(canvas, draw_begin_x, draw_begin_y, mousex, mousey, fill, color, thickness);
+                drawing = false;
+            }
         }
     }
 
@@ -181,33 +190,36 @@ void State::update() {
 
     if (drawing) {
         switch(current_tool) {
-            case 0: {
+            case TOOL_LINE: {
                 bresenham_line(screen, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
                 break;
             }
 
-            case 1: {
+            case TOOL_CIRCLE: {
                 float x = (float) fabs(mousex - draw_begin_x);
                 float y = (float) fabs(mousey - draw_begin_y);
-                midpoint_circle(screen, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color, thickness);
+                midpoint_circle(screen, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), fill, color, thickness);
                 break;
             }
 
-            case 2: {
+            case TOOL_PENCIL: {
                 bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
                 draw_begin_x = mousex;
                 draw_begin_y = mousey;
                 break;
             }
-            case 3: {
+            case TOOL_ERASER: {
                 float c[4] = {0,0,0,0};
                 bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, c, thickness + 2);
                 draw_begin_x = mousex;
                 draw_begin_y = mousey;
                 break;
             }
-            case 4: {
+            case TOOL_BUCKET: {
                 break;
+            }
+            case TOOL_RECT: {
+                rectangle(screen, draw_begin_x, draw_begin_y, mousex, mousey, fill, color, thickness);
             }
         }
     }
@@ -221,12 +233,15 @@ void draw_imgui(State *state) {
     ImGui::Begin("paint");
     ImGui::Text("Frametime: %f ms", 1000*state->delta_time);
     ImGui::Text("FPS: %.0f", 1/state->delta_time);
+
     if (ImGui::Button("Clear")) {
         state->clear = true;
     }
+
     if (ImGui::Button("Save")) {
         stbi_write_png("image.png", WIDTH, HEIGHT, 4, state->canvas, 4*WIDTH);
     }
+
     ImGui::SliderInt("Thickness", &state->thickness, 0, 10);
     float c[4] = {
         state->color.r / 255.0f,
@@ -234,28 +249,37 @@ void draw_imgui(State *state) {
         state->color.b / 255.0f,
         state->color.a / 255.0f,
     };
+
     if (ImGui::ColorEdit4("color", c, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar)) {
         state->color = Color(c);
     }
+
+    ImGui::Checkbox("Fill shape", &state->fill);
+
     float x = ImGui::CalcTextSize("Circle").x;
-    if (ImGui::Selectable("Line", state->current_tool == 0, 0, ImVec2(x, x))) {
-        state->current_tool = 0;
+    if (ImGui::Selectable("Pencil", state->current_tool == TOOL_PENCIL, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_PENCIL;
     }
     ImGui::SameLine();
-    if (ImGui::Selectable("Circle", state->current_tool == 1, 0, ImVec2(x, x))) {
-        state->current_tool = 1;
+    if (ImGui::Selectable("Eraser", state->current_tool == TOOL_ERASER, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_ERASER;
     }
     ImGui::SameLine();
-    if (ImGui::Selectable("Pencil", state->current_tool == 2, 0, ImVec2(x, x))) {
-        state->current_tool = 2;
+    if (ImGui::Selectable("Bucket", state->current_tool == TOOL_BUCKET, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_BUCKET;
+    }
+    if (ImGui::Selectable("Line", state->current_tool == TOOL_LINE, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_LINE;
     }
     ImGui::SameLine();
-    if (ImGui::Selectable("Eraser", state->current_tool == 3, 0, ImVec2(x, x))) {
-        state->current_tool = 3;
+    if (ImGui::Selectable("Circle", state->current_tool == TOOL_CIRCLE, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_CIRCLE;
     }
-    if (ImGui::Selectable("Bucket", state->current_tool == 4, 0, ImVec2(x, x))) {
-        state->current_tool = 4;
+    ImGui::SameLine();
+    if (ImGui::Selectable("Rect", state->current_tool == TOOL_RECT, 0, ImVec2(x, x))) {
+        state->current_tool = TOOL_RECT;
     }
+
     ImGui::End();
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
