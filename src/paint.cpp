@@ -6,8 +6,8 @@
 #include "imgui_impl_opengl3.h"
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 #include "paint.h"
 #include "primitives.h"
 #include "renderer.h"
@@ -19,11 +19,12 @@ struct State {
     bool clear = false;
     bool drawing = false;
     int current_tool = 0;
-    float color[4] = {0, 0, 0, 1};
-    float draw_begin_x = 0;
-    float draw_begin_y = 0;
-    double mousex;
-    double mousey;
+    Color color = Color(0,0,0,255);
+    int thickness = 0;
+    int draw_begin_x = 0;
+    int draw_begin_y = 0;
+    int mousex;
+    int mousey;
     double last_frame_time = 0;
     double delta_time;
 
@@ -122,15 +123,27 @@ void State::update() {
     delta_time = t - last_frame_time;
     last_frame_time = t;
 
-    glfwGetCursorPos(window, &mousex, &mousey);
+    double mx, my;
+    glfwGetCursorPos(window, &mx, &my);
+    mousex = (int) mx;
+    mousey = (int) my;
 
     if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS && !ImGui::GetIO().WantCaptureMouse) {
         switch (current_tool) {
             case 0:
             case 1:
+            case 2:
+            case 3:
             if (!drawing) {
-                draw_begin_x = (float)mousex;
-                draw_begin_y = (float)mousey;
+                draw_begin_x = mousex;
+                draw_begin_y = mousey;
+                drawing = true;
+            }
+            break;
+
+            case 4:
+            if (!drawing) {
+                flood_fill(canvas, mousex, mousey, color);
                 drawing = true;
             }
         }
@@ -139,7 +152,7 @@ void State::update() {
         switch (current_tool) {
             case 0:
             if (drawing) {
-                bresenham_line(canvas, (int)draw_begin_x, (int)draw_begin_y, (int)mousex, (int)mousey, color);
+                bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
                 drawing = false;
             }
             break;
@@ -148,9 +161,15 @@ void State::update() {
             if (drawing) {
                 float x = (float) fabs(mousex - draw_begin_x);
                 float y = (float) fabs(mousey - draw_begin_y);
-                midpoint_circle(canvas, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color);
+                midpoint_circle(canvas, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color, thickness);
                 drawing = false;
             }
+            break;
+
+            case 2:
+            case 3:
+            case 4:
+            drawing = false;
         }
     }
 
@@ -162,14 +181,34 @@ void State::update() {
 
     if (drawing) {
         switch(current_tool) {
-            case 0:
-            bresenham_line(screen, (int)draw_begin_x, (int)draw_begin_y, (int)mousex, (int)mousey, color);
-            break;
+            case 0: {
+                bresenham_line(screen, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
+                break;
+            }
 
-            case 1:
-            float x = (float) fabs(mousex - draw_begin_x);
-            float y = (float) fabs(mousey - draw_begin_y);
-            midpoint_circle(screen, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color);
+            case 1: {
+                float x = (float) fabs(mousex - draw_begin_x);
+                float y = (float) fabs(mousey - draw_begin_y);
+                midpoint_circle(screen, draw_begin_x, draw_begin_y, sqrt(x*x + y*y), color, thickness);
+                break;
+            }
+
+            case 2: {
+                bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, color, thickness);
+                draw_begin_x = mousex;
+                draw_begin_y = mousey;
+                break;
+            }
+            case 3: {
+                float c[4] = {0,0,0,0};
+                bresenham_line(canvas, draw_begin_x, draw_begin_y, mousex, mousey, c, thickness + 2);
+                draw_begin_x = mousex;
+                draw_begin_y = mousey;
+                break;
+            }
+            case 4: {
+                break;
+            }
         }
     }
 }
@@ -182,10 +221,21 @@ void draw_imgui(State *state) {
     ImGui::Begin("paint");
     ImGui::Text("Frametime: %f ms", 1000*state->delta_time);
     ImGui::Text("FPS: %.0f", 1/state->delta_time);
-    ImGui::SetNextItemWidth(200.0);
-    ImGui::ColorPicker4("color", state->color, ImGuiColorEditFlags_DisplayRGB | ImGuiColorEditFlags_AlphaBar);
     if (ImGui::Button("Clear")) {
         state->clear = true;
+    }
+    if (ImGui::Button("Save")) {
+        stbi_write_png("image.png", WIDTH, HEIGHT, 4, state->canvas, 4*WIDTH);
+    }
+    ImGui::SliderInt("Thickness", &state->thickness, 0, 10);
+    float c[4] = {
+        state->color.r / 255.0f,
+        state->color.g / 255.0f,
+        state->color.b / 255.0f,
+        state->color.a / 255.0f,
+    };
+    if (ImGui::ColorEdit4("color", c, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar)) {
+        state->color = Color(c);
     }
     float x = ImGui::CalcTextSize("Circle").x;
     if (ImGui::Selectable("Line", state->current_tool == 0, 0, ImVec2(x, x))) {
@@ -194,6 +244,17 @@ void draw_imgui(State *state) {
     ImGui::SameLine();
     if (ImGui::Selectable("Circle", state->current_tool == 1, 0, ImVec2(x, x))) {
         state->current_tool = 1;
+    }
+    ImGui::SameLine();
+    if (ImGui::Selectable("Pencil", state->current_tool == 2, 0, ImVec2(x, x))) {
+        state->current_tool = 2;
+    }
+    ImGui::SameLine();
+    if (ImGui::Selectable("Eraser", state->current_tool == 3, 0, ImVec2(x, x))) {
+        state->current_tool = 3;
+    }
+    if (ImGui::Selectable("Bucket", state->current_tool == 4, 0, ImVec2(x, x))) {
+        state->current_tool = 4;
     }
     ImGui::End();
     ImGui::Render();

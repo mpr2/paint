@@ -66,10 +66,10 @@ void Renderer::setup_input() {
         -1.0f,  1.0f,
     };
     GLfloat tex_coords[] = {
-        1.0f, 1.0f,
         1.0f, 0.0f,
-        0.0f, 0.0f,
+        1.0f, 1.0f,
         0.0f, 1.0f,
+        0.0f, 0.0f,
     };
     GLuint indices[] = {
         0, 1, 3,
