@@ -1,7 +1,11 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(paint CXX)
+project(paint C CXX)
 set(CMAKE_CXX_STANDARD 17)
+
+if(MINGW)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif()
 
 include(FetchContent)
 
